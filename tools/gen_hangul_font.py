@@ -6,11 +6,13 @@ import sys
 from PIL import Image, ImageDraw, ImageFont
 
 
-FONT_SIZE = 10
+FONT_SIZE = 8
 X_OFFSET = 0
 Y_OFFSET = 0
 START = 0xAC00
 END = 0xD7A3
+HANGUL_COUNT = END - START + 1
+RAW_PREFIX_BYTES = 8
 
 
 def render_glyph(font: ImageFont.FreeTypeFont, char: str) -> list[int]:
@@ -33,14 +35,30 @@ def render_glyph(font: ImageFont.FreeTypeFont, char: str) -> list[int]:
     return columns
 
 
+def load_raw_glyphs(raw_path: Path) -> list[list[int]]:
+    data = raw_path.read_bytes()
+    required = RAW_PREFIX_BYTES + (HANGUL_COUNT * 8)
+    if len(data) < required:
+        raise ValueError(f"raw font too small: expected at least {required} bytes, got {len(data)}")
+
+    glyphs: list[list[int]] = []
+    payload = data[RAW_PREFIX_BYTES:RAW_PREFIX_BYTES + (HANGUL_COUNT * 8)]
+    for i in range(HANGUL_COUNT):
+        start = i * 8
+        glyphs.append(list(payload[start:start + 8]))
+    return glyphs
+
+
 def main() -> int:
     if len(sys.argv) != 3:
-        print("usage: gen_hangul_font.py <font.ttf> <output.h>")
+        print("usage: gen_hangul_font.py <font.ttf|font.raw> <output.h>")
         return 1
 
     font_path = Path(sys.argv[1])
     out_path = Path(sys.argv[2])
-    font = ImageFont.truetype(str(font_path), FONT_SIZE)
+    raw_mode = font_path.suffix.lower() == ".raw"
+    glyphs = load_raw_glyphs(font_path) if raw_mode else None
+    font = None if raw_mode else ImageFont.truetype(str(font_path), FONT_SIZE)
 
     with out_path.open("w", encoding="ascii") as fh:
         fh.write("#ifndef GENERATED_HANGUL_FONT_DATA_H\n")
@@ -49,7 +67,7 @@ def main() -> int:
         fh.write("static const uint8_t hangul_font8x8[11172][8] = {\n")
 
         for codepoint in range(START, END + 1):
-            glyph = render_glyph(font, chr(codepoint))
+            glyph = glyphs[codepoint - START] if glyphs else render_glyph(font, chr(codepoint))
             values = ",".join(f"0x{value:02X}" for value in glyph)
             fh.write(f"\t{{ {values} }}, // U+{codepoint:04X}\n")
 
