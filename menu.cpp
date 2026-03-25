@@ -67,6 +67,25 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "profiling.h"
 #include "str_util.h"
 #include "autofire.h"
+#include "menu_locale.h"
+
+static inline const char *MenuTranslate(const char *s)
+{
+	return menu_translate(s);
+}
+
+static inline void MenuLocalizedWrite(unsigned char n, const char *s = "", unsigned char invert = 0, unsigned char stipple = 0, char usebg = 0, int maxinv = 32, int mininv = 0)
+{
+	::OsdWrite(n, MenuTranslate(s), invert, stipple, usebg, maxinv, mininv);
+}
+
+static inline void MenuLocalizedSetTitle(const char *s, int arrow = 0)
+{
+	::OsdSetTitle(MenuTranslate(s), arrow);
+}
+
+#define OsdWrite MenuLocalizedWrite
+#define OsdSetTitle MenuLocalizedSetTitle
 
 /*menu states*/
 enum MENU
@@ -803,7 +822,7 @@ static void MenuWrite(unsigned char n, const char *s = "", unsigned char invert 
 	}
 
 	OsdSetArrow(arrow);
-	OsdWriteOffset(row, s, invert, stipple, 0, (row == 0 && firstmenu) ? 17 : (row == (OsdGetSize()-1) && !arrow) ? 16 : 0, 0);
+	OsdWriteOffset(row, MenuTranslate(s), invert, stipple, 0, (row == 0 && firstmenu) ? 17 : (row == (OsdGetSize()-1) && !arrow) ? 16 : 0, 0);
 }
 
 const char* get_rbf_name_bootcore(char *str)
@@ -7882,7 +7901,7 @@ void InfoMessage(const char *message, int timeout, const char *title)
 			OsdEnable(OSD_MSG); // do not disable keyboard
 		}
 
-		set_text(message, 0);
+		set_text(MenuTranslate(message), 0);
 
 		menu_timer = GetTimer(timeout);
 		menustate = MENU_INFO;
