@@ -42,6 +42,7 @@ as rotated copies of the first 128 entries.  -- AMR
 #include "spi.h"
 
 #include "charrom.h"
+#include "hangul_font.h"
 #include "logo.h"
 #include "user_io.h"
 #include "hardware.h"
@@ -158,12 +159,14 @@ void OsdSetTitle(const char *s, int a)
 	int zeros = 0;
 	uint i = 0, j = 0;
 	uint outp = 0;
+	uint32_t codepoint = 0;
 	while (1)
 	{
-		int c = s[i++];
-		if (c && (outp<OSDHEIGHT-8))
+		const char *cur = s + i;
+		if (osd_decode_utf8_char(&cur, &codepoint) && (outp<OSDHEIGHT-8))
 		{
-			unsigned char *p = &charfont[c][0];
+			i = cur - s;
+			const unsigned char *p = osd_get_glyph(codepoint);
 			for (j = 0; j<8; ++j)
 			{
 				unsigned char nc = *p++;
@@ -172,7 +175,7 @@ void OsdSetTitle(const char *s, int a)
 					zeros = 0;
 					titlebuffer[outp++] = nc;
 				}
-				else if (zeros == 0 || (c == ' ' && zeros < 5))
+				else if (zeros == 0 || (codepoint == ' ' && zeros < 5))
 				{
 					titlebuffer[outp++] = 0;
 					zeros++;
@@ -269,6 +272,7 @@ void OsdWriteOffset(unsigned char n, const char *s, unsigned char invert, unsign
 
 	unsigned char xormask = 0;
 	unsigned char xorchar = 0;
+	uint32_t codepoint = 0;
 
 	i = 0;
 	// send all characters in string to OSD
@@ -321,19 +325,21 @@ void OsdWriteOffset(unsigned char n, const char *s, unsigned char invert, unsign
 		}
 		else
 		{
-			b = *s++;
-			if (!b) break;
+			const char *cur = s;
+			if (!osd_decode_utf8_char(&cur, &codepoint)) break;
+			s = cur;
+			b = static_cast<unsigned char>(codepoint);
 
-			if (b == 0xb)
+			if (codepoint == 0x0b)
 			{
 				stipplemask ^= 0xAA;
 				stipple ^= 0xff;
 			}
-			else if (b == 0xc)
+			else if (codepoint == 0x0c)
 			{
 				xorchar ^= 0xff;
 			}
-			else if (b == 0x0d || b == 0x0a)
+			else if (codepoint == 0x0d || codepoint == 0x0a)
 			{  // cariage return / linefeed, go to next line
 			   // increment line counter
 				if (++n >= linelimit)
@@ -345,7 +351,7 @@ void OsdWriteOffset(unsigned char n, const char *s, unsigned char invert, unsign
 			else if (i<(linelimit - 8))
 			{  // normal character
 				unsigned char c;
-				p = &charfont[b][0];
+				p = osd_get_glyph(codepoint);
 				for (c = 0; c<8; c++) {
 					char bg = usebg ? framebuffer[n][i+c-22] : 0;
 					osdbuf[osdbufpos++] = (((*p++ << offset)&stipplemask) ^ xormask ^ xorchar) | bg;
@@ -424,8 +430,8 @@ void OsdDrawLogo(int row)
 
 void OSD_PrintInfo(const char *message, int *width, int *height, int frame)
 {
-	static char str[INFO_MAXW * INFO_MAXH];
-	memset(str, ' ', sizeof(str));
+	static uint32_t str[INFO_MAXW * INFO_MAXH];
+	for (int i = 0; i < INFO_MAXW * INFO_MAXH; i++) str[i] = ' ';
 
 	// calc height/width if none provided. Add frame to calculated size.
 	// no frame will be added if width and height are provided.
@@ -434,9 +440,13 @@ void OSD_PrintInfo(const char *message, int *width, int *height, int frame)
 	int maxw = 0;
 	int x = calc ? 1 : 0;
 	int y = calc ? 1 : 0;
+	uint32_t codepoint = 0;
 	while (*message)
 	{
-		char c = *message++;
+		const char *cur = message;
+		if (!osd_decode_utf8_char(&cur, &codepoint)) break;
+		message = cur;
+		char c = static_cast<char>(codepoint);
 		if (c == 0xD) continue;
 		if (c == 0xA)
 		{
@@ -445,7 +455,7 @@ void OSD_PrintInfo(const char *message, int *width, int *height, int frame)
 			continue;
 		}
 
-		if (x < INFO_MAXW && y < INFO_MAXH) str[(y*INFO_MAXW) + x] = c;
+		if (x < INFO_MAXW && y < INFO_MAXH) str[(y*INFO_MAXW) + x] = codepoint;
 
 		x++;
 		if (x > maxw) maxw = x;
@@ -484,7 +494,7 @@ void OSD_PrintInfo(const char *message, int *width, int *height, int frame)
 
 		for (x = 0; x < w; x++)
 		{
-			const unsigned char *p = charfont[(uint)str[(y*INFO_MAXW) + x]];
+			const unsigned char *p = osd_get_glyph(str[(y*INFO_MAXW) + x]);
 			for (int i = 0; i < 8; i++) osdbuf[osdbufpos++] = *p++;
 		}
 	}
@@ -565,31 +575,36 @@ static void print_line(unsigned char line, const char *hdr, const char *text, un
 	osd_start(line);
 	draw_title(&titlebuffer[(osd_size - 1 - line) * 8]);
 
+	uint32_t codepoint = 0;
 	while (*hdr)
 	{
 		width -= 8;
-		p = charfont[(uint)(*hdr++)];
+		osd_decode_utf8_char(&hdr, &codepoint);
+		p = osd_get_glyph(codepoint);
 		for (int i = 0; i < 8; i++) osdbuf[osdbufpos++] = *p++ ^ invert;
 	}
 
 	if (offset)
 	{
 		width -= 8 - offset;
-		p = &charfont[(uint)(*text++)][offset];
+		osd_decode_utf8_char(&text, &codepoint);
+		p = &osd_get_glyph(codepoint)[offset];
 		for (; offset < 8; offset++) osdbuf[osdbufpos++] = *p++ ^ invert;
 	}
 
 	while (width > 8)
 	{
 		unsigned char b;
-		p = &charfont[(uint)(*text++)][0];
+		osd_decode_utf8_char(&text, &codepoint);
+		p = osd_get_glyph(codepoint);
 		for (b = 0; b < 8; b++) osdbuf[osdbufpos++] = *p++ ^ invert;
 		width -= 8;
 	}
 
 	if (width)
 	{
-		p = &charfont[(uint)(*text++)][0];
+		osd_decode_utf8_char(&text, &codepoint);
+		p = osd_get_glyph(codepoint);
 		while (width--) osdbuf[osdbufpos++] = *p++ ^ invert;
 	}
 }
@@ -600,7 +615,7 @@ void ScrollText(char n, const char *str, int off, int len, int max_len, unsigned
 
 #define BLANKSPACE 10 // number of spaces between the end and start of repeated name
 
-	char s[40], hdr[40];
+	char s[64], hdr[64];
 	long offset;
 	if (!max_len) max_len = 30;
 
@@ -609,18 +624,18 @@ void ScrollText(char n, const char *str, int off, int len, int max_len, unsigned
 		hdr[0] = 0;
 		if (off)
 		{
-			strncpy(hdr, str, off);
-			hdr[off] = 0;
-			str += off;
+			osd_encode_display_bytes(hdr, sizeof(hdr), str, 0, off);
+			str = OsdDisplayAdvance(str, off);
 			if (len > off) len -= off;
 		}
 
 		scroll_timer[idx] = GetTimer(SCROLL_DELAY2); // reset scroll timer to repeat delay
 
 		scroll_offset[idx]++; // increase scroll position (1 pixel unit)
-		memset(s, ' ', 32); // clear buffer
+		memset(s, ' ', sizeof(s) - 1); // clear buffer
+		s[sizeof(s) - 1] = 0;
 
-		if (!len) len = strlen(str); // get name length
+		if (!len) len = OsdDisplayLength(str); // get name length
 
 		if (off+2+len > max_len) // scroll name if longer than display size
 		{
@@ -630,11 +645,11 @@ void ScrollText(char n, const char *str, int off, int len, int max_len, unsigned
 			offset = scroll_offset[idx] >> 3; // get new starting character of the name (scroll_offset is no longer in 2 pixel unit)
 			len -= offset; // remaining number of characters in the name
 			if (len>max_len) len = max_len;
-			if (len > 0) strncpy(s, &str[offset], len); // copy name substring
+			if (len > 0) osd_encode_display_bytes(s, sizeof(s), str, offset, len); // copy name substring
 
 			if (len < max_len - BLANKSPACE) // file name substring and blank space is shorter than display line size
 			{
-				strncpy(s + len + BLANKSPACE, str, max_len - len - BLANKSPACE); // repeat the name after its end and predefined number of blank space
+				osd_encode_display_bytes(s + len + BLANKSPACE, sizeof(s) - (len + BLANKSPACE), str, 0, max_len - len - BLANKSPACE); // repeat the name after its end and predefined number of blank space
 			}
 
 			print_line(n, hdr, s, (max_len - 1) << 3, (scroll_offset[idx] & 0x7), invert); // OSD print function with pixel precision
@@ -658,6 +673,26 @@ void OsdCoreNameSet(const char* str)
 char* OsdCoreNameGet()
 {
 	return lastcorename;
+}
+
+int OsdDisplayLength(const char *s)
+{
+	return osd_utf8_length(s);
+}
+
+const char *OsdDisplayAdvance(const char *s, int count)
+{
+	return osd_utf8_advance(s, count);
+}
+
+void OsdDisplayCopy(char *dst, size_t dst_size, const char *src, int start_char, int max_chars)
+{
+	osd_utf8_copy_range(dst, dst_size, src, start_char, max_chars);
+}
+
+void OsdDisplayEncode(char *dst, size_t dst_size, const char *src, int start_char, int max_chars)
+{
+	osd_encode_display_bytes(dst, dst_size, src, start_char, max_chars);
 }
 
 void OsdUpdate()
