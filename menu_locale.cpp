@@ -1,4 +1,5 @@
 #include <string.h>
+#include <string>
 
 #include "menu_locale.h"
 
@@ -15,6 +16,8 @@ static const MenuLocaleEntry kMenuLocaleTable[] =
 	{"        SPACE to exit", "      SPACE로 종료"},
 	{"      Ctrl+ESC to exit", "   Ctrl+ESC로 종료"},
 	{"Information", "정보"},
+	{"Mouse mode ON", "마우스 모드 켜짐"},
+	{"Mouse mode OFF", "마우스 모드 꺼짐"},
 	{"Select INI", "INI 선택"},
 	{"System", "시스템"},
 	{"Video Processing", "비디오 처리"},
@@ -73,6 +76,10 @@ static const MenuLocaleEntry kMenuLocaleTable[] =
 	{"Menu-hold \x16 Clear", "메뉴 길게 \x16 지우기"},
 	{"        Help requires", "       도움말 기능은"},
 	{"        fb_terminal=1", "      fb_terminal=1 필요"},
+	{"  If you see this, then you", "  이 화면이 보인다면"},
+	{"  need to modify MiSTer.ini", "  MiSTer.ini를 수정해야 합니다"},
+	{" Either disable framebuffer:", " 프레임버퍼를 끄거나:"},
+	{"  or enable scaler on VGA:", " 또는 VGA 스케일러를 켜세요:"},
 	{"  Use dpad/cursor to select", "  방향키/커서로 선택"},
 	{"   Press any key to cancel", "    아무 키나 눌러 취소"},
 	{"           Loading...", "          불러오는 중..."},
@@ -88,9 +95,11 @@ static const MenuLocaleEntry kMenuLocaleTable[] =
 	{"          Clearing", "          지우는 중"},
 	{"          Canceling", "          취소하는 중"},
 	{"   Space/User \x16 Skip", "   Space/User \x16 건너뛰기"},
+	{"   (can use 2-button combo)", "   (2버튼 조합 사용 가능)"},
 	{"   You need to define this", "   이 항목을 먼저 정의해야"},
 	{" joystick in Menu core first", " 메뉴 코어에서 조이스틱 설정"},
 	{"      Press ESC/Enter", "      ESC/Enter를 누르세요"},
+	{"         User \x16 Undefine", "         User \x16 해제"},
 	{"          F12 \x16 Clear all", "         F12 \x16 모두 지우기"},
 	{"    Do you want to setup", "    설정을 진행하시겠습니까"},
 	{"    alternative buttons?", "    대체 버튼으로?"},
@@ -162,6 +171,10 @@ static const MenuLocaleEntry kMenuLocaleTable[] =
 	{"     Press key to change", "      변경할 키를 누르세요"},
 	{"           finish", "            완료"},
 	{"      on any keyboard", "       아무 키보드에서"},
+	{"\n\n         Canceled!\n", "\n\n           취소됨!\n"},
+	{"\n\n     No USB storage found\n   Falling back to SD card\n", "\n\n      USB 저장소 없음\n    SD 카드로 전환합니다\n"},
+	{"\n\n       Mouse mode lock\n             ON", "\n\n      마우스 모드 고정\n            켜짐"},
+	{"\n\n       Mouse mode lock\n             OFF", "\n\n      마우스 모드 고정\n            꺼짐"},
 	{" New                       \x16", " 새로 만들기              \x16"},
 	{" Delete", " 삭제"},
 	{" Done", " 완료"},
@@ -187,5 +200,74 @@ const char *menu_translate(const char *text)
 		if (!strcmp(text, entry.en)) return entry.ko;
 	}
 
-	return text;
+	struct FragmentEntry
+	{
+		const char *en;
+		const char *ko;
+	};
+
+	static const FragmentEntry kFragmentTable[] =
+	{
+		{" Refresh Rate:    ", " 주사율:           "},
+		{" Stereo Mix:      ", " 스테레오 믹스:    "},
+		{" Swap Joysticks:  ", " 조이스틱 교체:    "},
+		{" Swap Btn 2/3:    ", " 버튼 2/3 교체:    "},
+		{" 25MHz Audio Fix: ", " 25MHz 오디오 보정:"},
+		{" Scale:           ", " 스케일:           "},
+		{" Define ", " 설정 "},
+		{" buttons", " 버튼"},
+		{" Link:            ", " 링크:             "},
+		{" Type:                ", " 타입:             "},
+		{" Vert filter: ", " 수직 필터: "},
+		{" Scan filter: ", " 스캔 필터: "},
+		{" Intl filter: ", " 인터레이스 필터: "},
+		{" Gamma correction - ", " 감마 보정 - "},
+		{" Joysticks swap: ", " 조이스틱 교체: "},
+		{" Storage: USB", " 저장소: USB"},
+		{" Storage: SD card", " 저장소: SD 카드"},
+		{" Switch to SD card", " SD 카드로 전환"},
+		{" Switch to USB", " USB로 전환"},
+		{" Mouse mode ON", " 마우스 모드 켜짐"},
+		{" Mouse mode OFF", " 마우스 모드 꺼짐"},
+		{"Reset Minimig?", "Minimig 초기화?"},
+		{"Reset settings?", "설정 초기화?"},
+		{"Loading...", "불러오는 중..."},
+		{"Saving...", "저장 중..."},
+		{"Canceled!", "취소됨!"},
+		{"Enable", "활성"},
+		{"Disable", "비활성"},
+		{"Variable", "가변"},
+		{"Original", "원본"},
+		{"Full Screen", "전체 화면"},
+		{"From file", "파일에서"},
+		{"Same as Horz", "수평과 동일"},
+		{"Same as Vert", "수직과 동일"},
+		{"On", "켜짐"},
+		{"Off", "꺼짐"},
+		{"Yes", "예"},
+		{"No", "아니오"},
+	};
+
+	std::string translated(text);
+	bool changed = false;
+
+	for (const auto &entry : kFragmentTable)
+	{
+		size_t pos = 0;
+		while ((pos = translated.find(entry.en, pos)) != std::string::npos)
+		{
+			translated.replace(pos, strlen(entry.en), entry.ko);
+			pos += strlen(entry.ko);
+			changed = true;
+		}
+	}
+
+	if (!changed) return text;
+
+	static std::string buffers[8];
+	static size_t buffer_index = 0;
+	buffers[buffer_index] = translated;
+	const char *result = buffers[buffer_index].c_str();
+	buffer_index = (buffer_index + 1) % 8;
+	return result;
 }
