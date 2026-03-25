@@ -2,6 +2,7 @@
 #define OSD_H_INCLUDED
 
 #include <inttypes.h>
+#include <stddef.h>
 
 // some constants
 #define DISABLE_KEYBOARD 0x02        // disable keyboard while OSD is active
@@ -39,8 +40,11 @@ void OsdCoreNameSet(const char* str);
 char* OsdCoreNameGet();
 void OsdSetSize(int n);
 int OsdGetSize();
+int OsdDisplayLength(const char *s);
+const char *OsdDisplayAdvance(const char *s, int count);
+void OsdDisplayCopy(char *dst, size_t dst_size, const char *src, int start_char, int max_chars);
+void OsdDisplayEncode(char *dst, size_t dst_size, const char *src, int start_char, int max_chars);
 
 #define OsdIsBig (OsdGetSize()>8)
 
 #endif
-
