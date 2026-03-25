@@ -7649,7 +7649,7 @@ void ScrollLongName(void)
 	int off = 0;
 	int max_len;
 
-	int len = strlen(flist_SelectedItem()->altname); // get name length
+	int len = OsdDisplayLength(flist_SelectedItem()->altname); // get name length
 
 	max_len = 30; // number of file name characters to display (one more required for scrolling)
 	if (flist_SelectedItem()->de.d_type == DT_DIR)
@@ -7689,7 +7689,7 @@ void PrintDirectory(int expand)
 	{
 		int k = flist_iFirstEntry() + OsdGetSize() - 1;
 		if (flist_nDirEntries() && k == flist_iSelectedEntry() && k <= flist_nDirEntries()
-			&& strlen(flist_DirItem(k)->altname) > 28 && !(!cfg.rbf_hide_datecode && flist_DirItem(k)->datecode[0])
+			&& OsdDisplayLength(flist_DirItem(k)->altname) > 28 && !(!cfg.rbf_hide_datecode && flist_DirItem(k)->datecode[0])
 			&& flist_DirItem(k)->de.d_type != DT_DIR)
 		{
 			//make room for last expanded line
@@ -7710,7 +7710,7 @@ void PrintDirectory(int expand)
 
 		if (k < flist_nDirEntries())
 		{
-			len = strlen(flist_DirItem(k)->altname); // get name length
+			len = OsdDisplayLength(flist_DirItem(k)->altname); // get name length
 			if (len > 28)
 			{
 				len2 = len - 27;
@@ -7723,15 +7723,15 @@ void PrintDirectory(int expand)
 
 			if((flist_DirItem(k)->de.d_type == DT_DIR) && (fs_Options & SCANO_CORES) && (flist_DirItem(k)->altname[0] == '_'))
 			{
-				strncpy(s + 1, flist_DirItem(k)->altname+1, len-1);
+				OsdDisplayEncode(s + 1, sizeof(s) - 1, flist_DirItem(k)->altname + 1, 0, len - 1);
 			}
 			else if (flist_DirItem(k)->flags & DT_EXT_ZIP)
 			{
-				strncpy(s + 1, flist_DirItem(k)->altname, len-4); // strip .zip extension, see below
+				OsdDisplayEncode(s + 1, sizeof(s) - 1, flist_DirItem(k)->altname, 0, len - 4); // strip .zip extension, see below
 			}
 			else
 			{
-				strncpy(s + 1, flist_DirItem(k)->altname, len); // display only name
+				OsdDisplayEncode(s + 1, sizeof(s) - 1, flist_DirItem(k)->altname, 0, len); // display only name
 			}
 
 			char *datecode = flist_DirItem(k)->datecode;
@@ -7782,9 +7782,9 @@ void PrintDirectory(int expand)
 				if (i == 6) strcpy(s, "      Missing directory:");
 				if (i == 8)
 				{
-					len = strlen(home_dir);
+					len = OsdDisplayLength(home_dir);
 					if (len > 27) len = 27;
-					strncpy(s + 1 + ((27 - len) / 2), home_dir, len);
+					OsdDisplayEncode(s + 1 + ((27 - len) / 2), sizeof(s) - (1 + ((27 - len) / 2)), home_dir, 0, len);
 				}
 			}
 		}
@@ -7795,8 +7795,8 @@ void PrintDirectory(int expand)
 
 		if (sel && len2)
 		{
-			len = strlen(flist_DirItem(k)->altname);
-			strcpy(s+1, flist_DirItem(k)->altname + len - len2);
+			len = OsdDisplayLength(flist_DirItem(k)->altname);
+			OsdDisplayEncode(s + 1, sizeof(s) - 1, flist_DirItem(k)->altname, len - len2, len2);
 			OsdWriteOffset(i, s, sel, 0, 0, leftchar);
 			i++;
 		}
