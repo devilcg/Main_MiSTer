@@ -575,36 +575,34 @@ static void print_line(unsigned char line, const char *hdr, const char *text, un
 	osd_start(line);
 	draw_title(&titlebuffer[(osd_size - 1 - line) * 8]);
 
-	uint32_t codepoint = 0;
+	// hdr and text are pre-encoded by osd_encode_display_bytes: each byte is a direct
+	// charfont index (ASCII or Hangul slot 151-255). Do NOT re-decode as UTF-8 or
+	// high-byte slot indices (0xC0-0xFF) will be misinterpreted as multi-byte sequences.
 	while (*hdr)
 	{
 		width -= 8;
-		osd_decode_utf8_char(&hdr, &codepoint);
-		p = osd_get_glyph(codepoint);
+		p = charfont[(unsigned char)*hdr++];
 		for (int i = 0; i < 8; i++) osdbuf[osdbufpos++] = *p++ ^ invert;
 	}
 
 	if (offset)
 	{
 		width -= 8 - offset;
-		osd_decode_utf8_char(&text, &codepoint);
-		p = &osd_get_glyph(codepoint)[offset];
+		p = &charfont[(unsigned char)*text++][offset];
 		for (; offset < 8; offset++) osdbuf[osdbufpos++] = *p++ ^ invert;
 	}
 
 	while (width > 8)
 	{
 		unsigned char b;
-		osd_decode_utf8_char(&text, &codepoint);
-		p = osd_get_glyph(codepoint);
+		p = charfont[(unsigned char)*text++];
 		for (b = 0; b < 8; b++) osdbuf[osdbufpos++] = *p++ ^ invert;
 		width -= 8;
 	}
 
 	if (width)
 	{
-		osd_decode_utf8_char(&text, &codepoint);
-		p = osd_get_glyph(codepoint);
+		p = charfont[(unsigned char)*text++];
 		while (width--) osdbuf[osdbufpos++] = *p++ ^ invert;
 	}
 }
