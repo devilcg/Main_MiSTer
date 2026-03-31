@@ -8,9 +8,11 @@ namespace {
 
 constexpr uint32_t HANGUL_BASE = 0xAC00;
 constexpr uint32_t HANGUL_LAST = 0xD7A3;
-constexpr uint8_t HANGUL_SLOT_FIRST = 151;
-constexpr uint8_t HANGUL_SLOT_LAST = 255;
-constexpr size_t HANGUL_SLOT_COUNT = HANGUL_SLOT_LAST - HANGUL_SLOT_FIRST + 1;
+// Slots 0x80-0xBF: UTF-8 continuation bytes — never interpreted as lead bytes,
+// so OsdWriteOffset byte-re-reading is always safe (no false multi-byte merging).
+constexpr uint8_t HANGUL_SLOT_FIRST = 0x80;  // 128
+constexpr uint8_t HANGUL_SLOT_LAST  = 0xBF;  // 191
+constexpr size_t HANGUL_SLOT_COUNT = HANGUL_SLOT_LAST - HANGUL_SLOT_FIRST + 1; // 64
 
 struct GlyphCacheEntry
 {
