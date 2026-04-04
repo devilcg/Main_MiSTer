@@ -2,8 +2,8 @@ name: Korean OSD Auto Build
 
 on:
   schedule:
-    - cron: '0 15 * * *'  # 매일 00:00 KST (15:00 UTC)
-  workflow_dispatch:       # 수동 실행 가능
+    - cron: '0 15 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 저장소 체크아웃 (전체 히스토리)
+      - name: 저장소 체크아웃
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -25,61 +25,49 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: upstream 추가 및 fetch
+      - name: upstream fetch
         run: |
           git remote add upstream https://github.com/MiSTer-devel/Main_MiSTer.git || true
           git fetch upstream master
 
-      - name: 새 업스트림 커밋 확인
+      - name: 새 upstream 커밋 확인
         id: check
         run: |
           UPSTREAM_SHA=$(git rev-parse upstream/master)
-          # 현재 master에서 한글 패치 이전의 upstream SHA 찾기
-          # origin/master와 현재 한글 패치의 base를 비교
           MERGE_BASE=$(git merge-base HEAD upstream/master)
-
           echo "upstream_sha=$UPSTREAM_SHA" >> $GITHUB_OUTPUT
           echo "merge_base=$MERGE_BASE" >> $GITHUB_OUTPUT
-
           if [ "$MERGE_BASE" = "$UPSTREAM_SHA" ]; then
             echo "has_new=false" >> $GITHUB_OUTPUT
-            echo "업스트림 변경 없음. 빌드 스킵."
+            echo "업스트림 변경 없음. 스킵."
           else
             echo "has_new=true" >> $GITHUB_OUTPUT
-            NEW_COUNT=$(git log --oneline $MERGE_BASE..upstream/master | wc -l | tr -d ' ')
-            echo "새 upstream 커밋 ${NEW_COUNT}개 발견"
+            echo "새 upstream 커밋 발견:"
             git log --oneline $MERGE_BASE..upstream/master
           fi
 
       - name: 한글 패치 추출
         if: steps.check.outputs.has_new == 'true'
         run: |
-          MERGE_BASE=${{ steps.check.outputs.merge_base }}
           mkdir -p /tmp/korean-patches
-          git format-patch $MERGE_BASE..HEAD -o /tmp/korean-patches
-          echo "추출된 패치:"
+          git format-patch ${{ steps.check.outputs.merge_base }}..HEAD -o /tmp/korean-patches
+          echo "추출된 패치 목록:"
           ls /tmp/korean-patches/
 
-      - name: 최신 upstream 위로 rebase
+      - name: upstream 위로 rebase
         if: steps.check.outputs.has_new == 'true'
         id: rebase
         run: |
-          # upstream/master로 reset 후 패치 적용
           git reset --hard upstream/master
-
-          # 패치 순서대로 적용
-          PATCHES=$(ls /tmp/korean-patches/*.patch | sort)
           FAILED_PATCH=""
-
-          for patch in $PATCHES; do
-            echo "패치 적용 중: $(basename $patch)"
+          for patch in $(ls /tmp/korean-patches/*.patch | sort); do
+            echo "적용: $(basename $patch)"
             if ! git am "$patch"; then
               FAILED_PATCH="$(basename $patch)"
               git am --abort
               break
             fi
           done
-
           if [ -n "$FAILED_PATCH" ]; then
             echo "conflict=true" >> $GITHUB_OUTPUT
             echo "failed_patch=$FAILED_PATCH" >> $GITHUB_OUTPUT
@@ -87,48 +75,41 @@ jobs:
             echo "conflict=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: 충돌 발생 시 GitHub 이슈 생성
+      - name: 충돌 시 이슈 생성
         if: steps.check.outputs.has_new == 'true' && steps.rebase.outputs.conflict == 'true'
         uses: actions/github-script@v7
         with:
           script: |
             const upstreamSha = '${{ steps.check.outputs.upstream_sha }}';
             const failedPatch = '${{ steps.rebase.outputs.failed_patch }}';
-
-            // 이미 같은 이슈가 열려 있는지 확인
             const issues = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
               labels: 'rebase-conflict'
             });
-
             if (issues.data.length > 0) {
-              console.log('이미 충돌 이슈가 열려 있습니다.');
+              console.log('충돌 이슈 이미 존재');
               return;
             }
-
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `[자동] Rebase 충돌 발생 - upstream ${upstreamSha.substring(0, 7)}`,
-              body: `## 한글 패치 Rebase 충돌\n\n새 upstream 커밋에 한글 패치를 적용하는 중 충돌이 발생했습니다.\n\n**충돌 패치**: \`${failedPatch}\`\n**Upstream SHA**: \`${upstreamSha}\`\n\n수동으로 rebase 후 해결이 필요합니다.\n\n\`\`\`bash\ngit fetch upstream master\ngit rebase upstream/master\n# 충돌 해결\ngit push devilcg master --force\n\`\`\``,
+              title: '[자동] Rebase 충돌 - upstream ' + upstreamSha.substring(0, 7),
+              body: '## 한글 패치 Rebase 충돌\n\n**충돌 패치**: `' + failedPatch + '`\n**Upstream SHA**: `' + upstreamSha + '`\n\n수동 해결 필요:\n```bash\ngit fetch upstream master\ngit rebase upstream/master\ngit push devilcg master --force\n```',
               labels: ['rebase-conflict']
             });
 
-      - name: ARM 크로스 컴파일러 설치
+      - name: ARM 툴체인 설치
         if: steps.check.outputs.has_new == 'true' && steps.rebase.outputs.conflict == 'false'
         run: |
-          # GCC ARM toolchain 10.2 다운로드 (Makefile과 동일 버전)
           wget -q https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf.tar.xz
           tar xf gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf.tar.xz -C /opt
           echo "/opt/gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf/bin" >> $GITHUB_PATH
 
       - name: 빌드 의존성 설치
         if: steps.check.outputs.has_new == 'true' && steps.rebase.outputs.conflict == 'false'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y libfreetype6-dev
+        run: sudo apt-get install -y libfreetype6-dev
 
       - name: MiSTer 빌드
         if: steps.check.outputs.has_new == 'true' && steps.rebase.outputs.conflict == 'false'
@@ -136,46 +117,52 @@ jobs:
           make -j$(nproc)
           ls -lh bin/MiSTer
 
-      - name: devilcg master 업데이트 (force push)
+      - name: devilcg master force push
         if: steps.check.outputs.has_new == 'true' && steps.rebase.outputs.conflict == 'false'
-        run: |
-          git push origin master --force
+        run: git push origin master --force
 
-      - name: 릴리즈 태그 및 바이너리 업로드
+      - name: 릴리즈 태그 생성
         if: steps.check.outputs.has_new == 'true' && steps.rebase.outputs.conflict == 'false'
+        id: tag
         run: |
           DATE=$(date +'%y%m%d')
           TAG="korean-final-${DATE}"
-
-          # 태그 중복 방지
           if git ls-remote --tags origin | grep -q "refs/tags/${TAG}$"; then
             TAG="korean-final-${DATE}-r2"
           fi
-
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "date=$DATE" >> $GITHUB_OUTPUT
           git tag "$TAG"
           git push origin "$TAG"
 
-          # upstream 최신 커밋 목록 가져오기
-          UPSTREAM_LOG=$(git log ${{ steps.check.outputs.merge_base }}..upstream/master --oneline | head -10)
+      - name: 릴리즈 노트 생성
+        if: steps.check.outputs.has_new == 'true' && steps.rebase.outputs.conflict == 'false'
+        run: |
+          git log ${{ steps.check.outputs.merge_base }}..upstream/master --oneline | head -10 > /tmp/upstream_log.txt
+          DATE=${{ steps.tag.outputs.date }}
+          {
+            echo "## 한글 OSD 빌드 (${DATE})"
+            echo ""
+            echo "### 업스트림 신규 업데이트"
+            cat /tmp/upstream_log.txt
+            echo ""
+            echo "### 한글 패치 내용"
+            echo "- OSD 한글 파일명 표시 지원"
+            echo "- 메뉴 한국어 로컬라이제이션"
+            echo "- Galmuri8 한글 비트맵 폰트"
+            echo "- 게임 목록 한글 깨짐 수정"
+            echo ""
+            echo "### 설치 방법"
+            echo "1. MiSTer 파일을 SD카드 루트에 복사 (/media/fat/MiSTer)"
+            echo "2. 또는 MiSTer OSD → Scripts → korean_update.sh 실행"
+          } > /tmp/release_notes.md
 
-          gh release create "$TAG" bin/MiSTer \
+      - name: GitHub 릴리즈 생성
+        if: steps.check.outputs.has_new == 'true' && steps.rebase.outputs.conflict == 'false'
+        run: |
+          gh release create ${{ steps.tag.outputs.tag }} bin/MiSTer \
             --repo ${{ github.repository }} \
-            --title "Korean OSD - ${DATE}" \
-            --notes "## 한글 OSD 빌드 (${DATE})
-
-### 업스트림 신규 업데이트
-\`\`\`
-${UPSTREAM_LOG}
-\`\`\`
-
-### 한글 패치 내용
-- OSD 한글 파일명 표시 지원
-- 메뉴 한국어 로컬라이제이션
-- Galmuri8 한글 비트맵 폰트
-- 게임 목록 한글 깨짐 수정
-
-### 설치 방법
-1. \`MiSTer\` 파일을 SD카드 루트에 복사 (\`/media/fat/MiSTer\`)
-2. 또는 MiSTer OSD → Scripts → \`korean_update.sh\` 실행"
+            --title "Korean OSD - ${{ steps.tag.outputs.date }}" \
+            --notes-file /tmp/release_notes.md
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
