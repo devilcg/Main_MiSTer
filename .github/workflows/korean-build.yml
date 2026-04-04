@@ -160,7 +160,7 @@ jobs:
       - name: GitHub 릴리즈 생성
         if: steps.check.outputs.has_new == 'true' && steps.rebase.outputs.conflict == 'false'
         run: |
-          gh release create ${{ steps.tag.outputs.tag }} bin/MiSTer \
+          gh release create ${{ steps.tag.outputs.tag }} bin/MiSTer Scripts/korean_update.sh \
             --repo ${{ github.repository }} \
             --title "Korean OSD - ${{ steps.tag.outputs.date }}" \
             --notes-file /tmp/release_notes.md
