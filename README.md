@@ -19,7 +19,35 @@
 
 1. [`Scripts/korean_update.sh`](Scripts/korean_update.sh) 파일을 SD카드의 `/media/fat/Scripts/` 폴더에 복사
 2. MiSTer OSD → **Scripts** → `korean_update.sh` 실행
-3. 최신 한글 버전 자동 감지 → 다운로드 → 설치 → 재시작
+3. 아래와 같이 단계별로 진행 상황이 표시됩니다
+
+```
+=====================================
+  MiSTer Korean OSD Update Script
+=====================================
+
+[1] Checking internet connection...
+    OK Connected.
+[2] Fetching latest release info from GitHub...
+    OK Latest: korean-final-260405 (2026-04-05)
+[3] Checking installed version...
+    OK Installed: 2026-04-04 02:35
+    New version available!
+[4] Backing up current binary...
+    OK Saved to: /media/fat/MiSTer_Backups/MiSTer_20260406_103000
+[5] Downloading new binary...
+    ################################ 100.0%
+    OK Downloaded (1094 KB).
+[6] Installing...
+    OK Installed to: /media/fat/MiSTer
+
+=====================================
+  Update complete!
+  Version: korean-final-260405
+=====================================
+
+Rebooting MiSTer in 3 seconds...
+```
 
 ### 방법 2 — 수동 설치
 
