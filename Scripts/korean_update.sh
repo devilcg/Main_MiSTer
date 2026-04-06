@@ -32,8 +32,14 @@ fi
 
 echo -e "${CYAN}Fetching latest release info...${NC}"
 
-# Get latest release info via GitHub API
-RELEASE_JSON=$(curl -s --max-time 15 "$API_URL")
+# Get latest release info via GitHub API (retry up to 3 times)
+RELEASE_JSON=""
+for i in 1 2 3; do
+    RELEASE_JSON=$(curl -sk --max-time 30 "$API_URL")
+    [ -n "$RELEASE_JSON" ] && break
+    echo -e "${YELLOW}  Retrying... (${i}/3)${NC}"
+    sleep 3
+done
 
 if [ -z "$RELEASE_JSON" ]; then
     echo -e "${RED}[Error] No response from GitHub API.${NC}"
