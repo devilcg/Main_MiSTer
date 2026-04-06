@@ -49,7 +49,65 @@
 Rebooting MiSTer in 3 seconds...
 ```
 
-### 방법 2 — 수동 설치
+---
+
+## 한글 게임명 적용 스크립트
+
+ROM 파일명을 변경하지 않고 OSD에서 보여줄 때만 한글 게임명으로 표시합니다.
+
+```
+실제 파일:  Super Mario Bros (USA).nes  ← 변경 없음
+OSD 표시:  슈퍼 마리오 브라더스         ← names.txt 참조
+```
+
+**지원 시스템:** NES, SNES, 메가드라이브, 네오지오, 게임보이/컬러/어드밴스, PC엔진, MSX, 마스터시스템, 세가32X, 아케이드
+
+### 사용법
+
+1. [`Scripts/korean_names.sh`](Scripts/korean_names.sh) 파일을 SD카드의 `/media/fat/Scripts/` 폴더에 복사
+2. MiSTer OSD → **Scripts** → `korean_names.sh` 실행
+3. 완료 후 코어 재시작 시 한글명으로 표시됩니다
+
+```
+=====================================
+  MiSTer Korean Game Names Script
+=====================================
+
+  Korean game name data provided by:
+  텐타클 팀 (tentacleteam)
+  https://github.com/tentacleteam/romlistkr
+  License: MIT
+
+[1] Checking internet connection...
+    OK Connected.
+[2] Checking Python 3...
+    OK Python 3.x
+[3] Downloading romlistkr game data...
+    OK Downloaded 12 system(s).
+[4] Parsing game names...
+    OK  nes            4,388개 → /media/fat/games/NES/names.txt
+    OK  snes           X,XXX개 → /media/fat/games/SNES/names.txt
+    OK  megadrive      X,XXX개 → /media/fat/games/MegaDrive/names.txt
+    ...
+    Total: XX,XXX개 게임명 적용
+
+=====================================
+  Korean game names applied!
+=====================================
+
+  Data by 텐타클 팀 (tentacleteam)
+  https://github.com/tentacleteam/romlistkr
+  MIT License
+```
+
+### 출처
+
+한글 게임명 데이터는 **텐타클 팀**의 오픈소스 프로젝트 [romlistkr](https://github.com/tentacleteam/romlistkr)에서 제공됩니다.
+MIT 라이선스에 따라 출처 표기 하에 사용합니다.
+
+---
+
+## 방법 2 — 수동 설치
 
 1. [Releases](https://github.com/devilcg/Main_MiSTer/releases/latest) 에서 최신 `MiSTer` 파일 다운로드
 2. SD카드 루트(`/media/fat/MiSTer`)에 복사하여 덮어쓰기
