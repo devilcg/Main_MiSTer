@@ -18,31 +18,40 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
+STEP=0
+step() {
+    STEP=$((STEP + 1))
+    echo -e "${CYAN}[${STEP}] $1${NC}"
+}
+ok()   { echo -e "    ${GREEN}OK${NC} $1"; }
+fail() { echo -e "    ${RED}FAIL${NC} $1"; }
+
 echo ""
 echo -e "${CYAN}=====================================${NC}"
 echo -e "${CYAN}  MiSTer Korean OSD Update Script   ${NC}"
 echo -e "${CYAN}=====================================${NC}"
 echo ""
 
-# Check internet connection
-if ! ping -c 1 -W 3 8.8.8.8 > /dev/null 2>&1 && ! curl -s --max-time 10 https://api.github.com > /dev/null 2>&1; then
-    echo -e "${RED}[Error] Please check your internet connection.${NC}"
+# ── Step 1: Internet check ─────────────────────────
+step "Checking internet connection..."
+if ! ping -c 1 -W 3 8.8.8.8 > /dev/null 2>&1 && ! curl -sk --max-time 10 https://api.github.com > /dev/null 2>&1; then
+    fail "No internet. Please check your network connection."
     exit 1
 fi
+ok "Connected."
 
-echo -e "${CYAN}Fetching latest release info...${NC}"
-
-# Get latest release info via GitHub API (retry up to 3 times)
+# ── Step 2: Fetch latest release info ──────────────
+step "Fetching latest release info from GitHub..."
 RELEASE_JSON=""
 for i in 1 2 3; do
     RELEASE_JSON=$(curl -sk --max-time 30 "$API_URL")
     [ -n "$RELEASE_JSON" ] && break
-    echo -e "${YELLOW}  Retrying... (${i}/3)${NC}"
+    echo -e "    ${YELLOW}Retrying... (${i}/3)${NC}"
     sleep 3
 done
 
 if [ -z "$RELEASE_JSON" ]; then
-    echo -e "${RED}[Error] No response from GitHub API.${NC}"
+    fail "No response from GitHub API."
     exit 1
 fi
 
@@ -51,80 +60,78 @@ DOWNLOAD_URL=$(echo "$RELEASE_JSON" | grep '"browser_download_url"' | grep 'MiST
 RELEASE_DATE=$(echo "$RELEASE_JSON" | grep '"published_at"' | head -1 | cut -d'"' -f4 | cut -c1-10)
 
 if [ -z "$LATEST_TAG" ] || [ -z "$DOWNLOAD_URL" ]; then
-    echo -e "${RED}[Error] Failed to parse release info.${NC}"
+    fail "Failed to parse release info."
     exit 1
 fi
+ok "Latest: ${LATEST_TAG} (${RELEASE_DATE})"
 
-echo -e "  Latest version: ${GREEN}${LATEST_TAG}${NC} (${RELEASE_DATE})"
-
-# Check currently installed version (compare by binary date)
-CURRENT_DATE=""
-if [ -f "$INSTALL_PATH" ]; then
-    CURRENT_DATE=$(date -r "$INSTALL_PATH" '+%Y-%m-%d %H:%M')
-    echo -e "  Installed: ${YELLOW}${CURRENT_DATE}${NC}"
-fi
-
-# Compare release date with current file date
+# ── Step 3: Version check ──────────────────────────
+step "Checking installed version..."
 RELEASE_TS=$(date -d "$RELEASE_DATE" '+%s' 2>/dev/null || date -j -f '%Y-%m-%d' "$RELEASE_DATE" '+%s' 2>/dev/null)
 CURRENT_TS=0
 if [ -f "$INSTALL_PATH" ]; then
+    CURRENT_DATE=$(date -r "$INSTALL_PATH" '+%Y-%m-%d %H:%M')
     CURRENT_TS=$(date -r "$INSTALL_PATH" '+%s')
+    ok "Installed: ${CURRENT_DATE}"
+else
+    ok "No existing installation found."
 fi
 
 if [ "$CURRENT_TS" -ge "$RELEASE_TS" ] 2>/dev/null; then
     echo ""
-    echo -e "${GREEN}Already up to date.${NC}"
+    echo -e "${GREEN}Already up to date. Nothing to do.${NC}"
     echo ""
     exit 0
 fi
 
 echo ""
-echo -e "${YELLOW}New version available. Starting update...${NC}"
+echo -e "${YELLOW}  New version available!${NC}"
 echo ""
 
-# Create backup directory
+# ── Step 4: Backup ─────────────────────────────────
+step "Backing up current binary..."
 mkdir -p "$BACKUP_DIR"
-
-# Backup current binary
 if [ -f "$INSTALL_PATH" ]; then
     BACKUP_FILE="${BACKUP_DIR}/MiSTer_$(date '+%Y%m%d_%H%M%S')"
     cp "$INSTALL_PATH" "$BACKUP_FILE"
-    echo -e "  Backup saved: ${BACKUP_FILE}"
+    ok "Saved to: ${BACKUP_FILE}"
+else
+    ok "Skipped (no existing binary)."
 fi
 
-# Download new binary
+# ── Step 5: Download ───────────────────────────────
+step "Downloading new binary..."
 TMP_FILE="/tmp/MiSTer_korean_new"
-echo -e "  Downloading..."
-
-if ! curl -L --max-time 60 --progress-bar "$DOWNLOAD_URL" -o "$TMP_FILE"; then
-    echo -e "${RED}[Error] Download failed.${NC}"
+if ! curl -Lk --max-time 60 --progress-bar "$DOWNLOAD_URL" -o "$TMP_FILE"; then
+    fail "Download failed."
     rm -f "$TMP_FILE"
     exit 1
 fi
 
-# Check file size (minimum 500KB)
 FILE_SIZE=$(wc -c < "$TMP_FILE")
 if [ "$FILE_SIZE" -lt 500000 ]; then
-    echo -e "${RED}[Error] Downloaded file is too small (possibly corrupted).${NC}"
+    fail "Downloaded file is too small (possibly corrupted)."
     rm -f "$TMP_FILE"
     exit 1
 fi
+ok "Downloaded ($(( FILE_SIZE / 1024 )) KB)."
 
-# Install
+# ── Step 6: Install ────────────────────────────────
+step "Installing..."
 cp "$TMP_FILE" "$INSTALL_PATH"
 chmod +x "$INSTALL_PATH"
 rm -f "$TMP_FILE"
+ok "Installed to: ${INSTALL_PATH}"
 
-echo -e "  Installation complete!"
+# ── Done ───────────────────────────────────────────
 echo ""
 echo -e "${GREEN}=====================================${NC}"
-echo -e "${GREEN}  Korean OSD update complete!        ${NC}"
+echo -e "${GREEN}  Update complete!                   ${NC}"
 echo -e "${GREEN}  Version: ${LATEST_TAG}             ${NC}"
 echo -e "${GREEN}=====================================${NC}"
 echo ""
-echo -e "${YELLOW}Rebooting MiSTer...${NC}"
-sleep 2
+echo -e "${YELLOW}Rebooting MiSTer in 3 seconds...${NC}"
+sleep 3
 
-# Reboot MiSTer
 sync
 reboot
