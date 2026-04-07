@@ -55,24 +55,10 @@ ok "$PYTHON_VER"
 step "Downloading romlistkr game data..."
 mkdir -p "$TMP_DIR"
 
-declare -A SYSTEMS=(
-    ["nes"]="NES"
-    ["snes"]="SNES"
-    ["megadrive"]="MegaDrive"
-    ["neogeo"]="NeoGeo"
-    ["gb"]="Gameboy"
-    ["gbc"]="Gameboy"
-    ["gba"]="GBA"
-    ["pcengine"]="TGFX16"
-    ["msx"]="MSX"
-    ["mastersystem"]="SMS"
-    ["sega32x"]="S32X"
-    ["arcade"]="__arcade__"
-)
 
 DOWNLOAD_OK=0
 DOWNLOAD_FAIL=0
-for sys in "${!SYSTEMS[@]}"; do
+for sys in nes snes megadrive neogeo gb gbc gba pcengine msx mastersystem sega32x arcade; do
     url="${BASE_URL}/${sys}/gamelist.xml"
     out="${TMP_DIR}/${sys}.xml"
     if curl -sk --max-time 30 "$url" -o "$out" && [ -s "$out" ]; then
