@@ -4,9 +4,9 @@ MiSTer Subtitle Server
 ======================
 - GET  /              → 폰 웹앱 서빙
 - GET  /app.js        → 웹앱 JS 서빙
-- POST /translate     → 이미지(base64) 수신 → Claude API → 번역 → OSD + 응답
+- POST /translate     → 이미지(base64) 수신 → AI API → 번역 → OSD + 응답
 - GET  /config        → 현재 설정 확인
-- POST /config        → API Key 저장
+- POST /config        → 설정 저장 (provider, API Keys)
 
 MiSTer 시작 시 자동 실행 (/media/fat/linux/user-startup.sh 에 추가):
   python3 /media/fat/Scripts/subtitle_server.py &
@@ -39,7 +39,7 @@ def load_config() -> dict:
             return json.loads(CONFIG_FILE.read_text())
         except Exception:
             pass
-    return {"api_key": ""}
+    return {"provider": "claude", "claude_api_key": "", "openai_api_key": ""}
 
 def save_config(cfg: dict):
     CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -61,9 +61,9 @@ def send_to_osd(text: str) -> bool:
         return False
 
 
-# ── Claude API 호출 (서버사이드) ──────────────────────────────────────────────
+# ── 공통 프롬프트 ─────────────────────────────────────────────────────────────
 
-CLAUDE_PROMPT = """이 이미지는 레트로 게임 화면입니다.
+TRANSLATE_PROMPT = """이 이미지는 레트로 게임 화면입니다.
 화면에서 일본어 텍스트(대화, 메뉴, 자막 등)를 찾아 한국어로 번역하세요.
 
 규칙:
@@ -71,6 +71,9 @@ CLAUDE_PROMPT = """이 이미지는 레트로 게임 화면입니다.
 2. 있으면 {"found":true,"original":"원문","translation":"한국어 번역"} 반환
 3. 캐릭터 이름은 음역 유지 (예: 루피, 나루토)
 4. JSON만 반환, 설명 없음"""
+
+
+# ── Claude API 호출 ───────────────────────────────────────────────────────────
 
 def call_claude(api_key: str, image_b64: str) -> dict:
     payload = json.dumps({
@@ -84,7 +87,7 @@ def call_claude(api_key: str, image_b64: str) -> dict:
                     "media_type": "image/jpeg",
                     "data": image_b64
                 }},
-                {"type": "text", "text": CLAUDE_PROMPT},
+                {"type": "text", "text": TRANSLATE_PROMPT},
             ]
         }]
     }).encode("utf-8")
@@ -104,11 +107,68 @@ def call_claude(api_key: str, image_b64: str) -> dict:
         body = json.loads(resp.read())
 
     text = body["content"][0]["text"].strip()
+    return _parse_json_result(text)
+
+
+# ── OpenAI API 호출 ───────────────────────────────────────────────────────────
+
+def call_openai(api_key: str, image_b64: str) -> dict:
+    payload = json.dumps({
+        "model": "gpt-4o-mini",
+        "max_tokens": 256,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {
+                    "url": f"data:image/jpeg;base64,{image_b64}",
+                    "detail": "low"
+                }},
+                {"type": "text", "text": TRANSLATE_PROMPT},
+            ]
+        }]
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        "https://api.openai.com/v1/chat/completions",
+        data=payload,
+        headers={
+            "Content-Type":  "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
+        method="POST",
+    )
+
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        body = json.loads(resp.read())
+
+    text = body["choices"][0]["message"]["content"].strip()
+    return _parse_json_result(text)
+
+
+# ── 공통 JSON 파싱 ────────────────────────────────────────────────────────────
+
+def _parse_json_result(text: str) -> dict:
     match_start = text.find("{")
     match_end   = text.rfind("}") + 1
     if match_start == -1:
         return {"found": False}
     return json.loads(text[match_start:match_end])
+
+
+# ── AI 번역 디스패처 ──────────────────────────────────────────────────────────
+
+def call_ai(cfg: dict, image_b64: str) -> dict:
+    provider = cfg.get("provider", "claude")
+    if provider == "openai":
+        api_key = cfg.get("openai_api_key", "")
+        if not api_key:
+            raise ValueError("OpenAI API Key 미설정")
+        return call_openai(api_key, image_b64)
+    else:
+        api_key = cfg.get("claude_api_key", "")
+        if not api_key:
+            raise ValueError("Claude API Key 미설정")
+        return call_claude(api_key, image_b64)
 
 
 # ── 정적 파일 서빙 ────────────────────────────────────────────────────────────
@@ -140,6 +200,9 @@ def serve_static(handler, rel_path: str):
 
 # ── HTTP 핸들러 ───────────────────────────────────────────────────────────────
 
+def _mask(key: str) -> str:
+    return (key[:8] + "...") if key else ""
+
 class SubtitleHandler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
@@ -153,8 +216,11 @@ class SubtitleHandler(BaseHTTPRequestHandler):
             serve_static(self, path.lstrip("/"))
         elif path == "/config":
             cfg = load_config()
-            # API Key는 앞 8자만 노출
-            safe = {**cfg, "api_key": cfg["api_key"][:8] + "..." if cfg["api_key"] else ""}
+            safe = {
+                "provider":       cfg.get("provider", "claude"),
+                "claude_api_key": _mask(cfg.get("claude_api_key", "")),
+                "openai_api_key": _mask(cfg.get("openai_api_key", "")),
+            }
             self._json(200, safe)
         else:
             self.send_response(404)
@@ -175,41 +241,41 @@ class SubtitleHandler(BaseHTTPRequestHandler):
             self._json(400, {"error": "invalid json"})
             return
 
-        # ── POST /config: API Key 저장 ──
+        # ── POST /config ──
         if self.path == "/config":
-            api_key = data.get("api_key", "").strip()
-            if not api_key:
-                self._json(400, {"error": "api_key required"})
-                return
             cfg = load_config()
-            cfg["api_key"] = api_key
+            if "provider" in data:
+                cfg["provider"] = data["provider"]
+            if "claude_api_key" in data and data["claude_api_key"].strip():
+                cfg["claude_api_key"] = data["claude_api_key"].strip()
+            if "openai_api_key" in data and data["openai_api_key"].strip():
+                cfg["openai_api_key"] = data["openai_api_key"].strip()
             save_config(cfg)
-            print(f"[config] API Key 저장됨")
-            self._json(200, {"ok": True})
+            print(f"[config] 저장됨 — provider={cfg['provider']}")
+            self._json(200, {"ok": True, "provider": cfg["provider"]})
             return
 
-        # ── POST /translate: 이미지 번역 + OSD ──
+        # ── POST /translate ──
         if self.path == "/translate":
             image_b64 = data.get("image", "").strip()
             if not image_b64:
                 self._json(400, {"error": "image required"})
                 return
 
-            cfg     = load_config()
-            api_key = cfg.get("api_key", "")
-            if not api_key:
-                self._json(503, {"error": "API Key 미설정 — 설정 탭에서 입력하세요"})
-                return
+            cfg = load_config()
 
             try:
-                result = call_claude(api_key, image_b64)
+                result = call_ai(cfg, image_b64)
+            except ValueError as e:
+                self._json(503, {"error": str(e)})
+                return
             except urllib.error.HTTPError as e:
                 err = e.read().decode("utf-8", errors="replace")
-                print(f"[claude] API 오류 {e.code}: {err}")
-                self._json(502, {"error": f"Claude API {e.code}"})
+                print(f"[ai] API 오류 {e.code}: {err}")
+                self._json(502, {"error": f"AI API {e.code}"})
                 return
             except Exception as e:
-                print(f"[claude] 오류: {e}")
+                print(f"[ai] 오류: {e}")
                 self._json(502, {"error": str(e)})
                 return
 
@@ -252,12 +318,16 @@ def main():
         ip = "?.?.?.?"
 
     cfg = load_config()
-    key_status = "설정됨" if cfg.get("api_key") else "미설정 (웹앱 설정 탭에서 입력)"
+    provider = cfg.get("provider", "claude")
+    claude_key = "설정됨" if cfg.get("claude_api_key") else "미설정"
+    openai_key = "설정됨" if cfg.get("openai_api_key") else "미설정"
 
     print(f"\n=== MiSTer Subtitle Server ===")
-    print(f"  폰 웹앱 : http://{ip}:{HTTP_PORT}/")
-    print(f"  API Key : {key_status}")
-    print(f"  정적파일: {STATIC_DIR}")
+    print(f"  폰 웹앱  : http://{ip}:{HTTP_PORT}/")
+    print(f"  Provider : {provider}")
+    print(f"  Claude   : {claude_key}")
+    print(f"  OpenAI   : {openai_key}")
+    print(f"  정적파일 : {STATIC_DIR}")
     print(f"==============================\n")
 
     HTTPServer(("0.0.0.0", HTTP_PORT), SubtitleHandler).serve_forever()
