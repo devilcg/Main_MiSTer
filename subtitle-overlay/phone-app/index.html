@@ -170,13 +170,40 @@
       color: #fff !important;
     }
     .config-status {
-      margin-top: 8px;
       font-size: 12px;
       color: #666;
       min-height: 18px;
+      text-align: center;
     }
     .config-status.ok  { color: #4ade80; }
     .config-status.err { color: #f87171; }
+
+    .provider-btns {
+      display: flex;
+      gap: 10px;
+    }
+    .provider-btn {
+      flex: 1;
+      padding: 12px;
+      background: #16213e;
+      border: 2px solid #0f3460;
+      border-radius: 10px;
+      color: #666;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .provider-btn.provider-active {
+      border-color: #e94560;
+      color: #eee;
+      background: #1a1a2e;
+    }
+    .key-status {
+      font-size: 10px;
+      color: #4ade80;
+      font-weight: 400;
+      text-transform: none;
+    }
 
     .note {
       font-size: 11px;
@@ -274,21 +301,40 @@
   </div>
 
   <div class="config-section">
-    <h2>Anthropic API Key</h2>
-    <div class="row">
-      <input id="apiKeyInput" type="password" placeholder="sk-ant-...">
-      <button class="btn-primary" onclick="saveApiKey()">저장</button>
+    <h2>AI 제공자</h2>
+    <div class="provider-btns">
+      <button id="btnProviderClaude" class="provider-btn provider-active" onclick="selectProvider('claude')">
+        🟣 Claude
+      </button>
+      <button id="btnProviderOpenAI" class="provider-btn" onclick="selectProvider('openai')">
+        🟢 OpenAI
+      </button>
     </div>
-    <p class="note">
-      API Key는 MiSTer에만 저장됩니다.<br>
-      폰에는 저장되지 않아 안전합니다.
-    </p>
   </div>
 
+  <div class="config-section">
+    <h2>Claude API Key <span class="key-status" id="claudeStatus"></span></h2>
+    <div class="row">
+      <input id="claudeKeyInput" type="password" placeholder="sk-ant-...">
+      <button onclick="saveKey('claude')">저장</button>
+    </div>
+  </div>
+
+  <div class="config-section">
+    <h2>OpenAI API Key <span class="key-status" id="openaiStatus"></span></h2>
+    <div class="row">
+      <input id="openaiKeyInput" type="password" placeholder="sk-...">
+      <button onclick="saveKey('openai')">저장</button>
+    </div>
+  </div>
+
+  <div id="configStatus" class="config-status"></div>
+
   <div class="note">
+    API Key는 MiSTer에만 저장됩니다 (폰에 저장 안 됨).<br><br>
     처음 사용 시:<br>
     1. MiSTer IP 입력 후 <b>확인</b><br>
-    2. Anthropic API Key 입력 후 <b>저장</b><br>
+    2. 사용할 AI 선택 후 API Key 저장<br>
     3. 카메라 탭에서 ▶ 시작
   </div>
 
