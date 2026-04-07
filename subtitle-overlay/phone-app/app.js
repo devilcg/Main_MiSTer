@@ -37,22 +37,44 @@ function switchTab(tab) {
   document.getElementById('viewConfig').style.display = tab === 'config' ? '' : 'none';
 }
 
-// ── API Key 저장 (MiSTer에 전송) ──────────────────────────────────────────
-async function saveApiKey() {
+// ── Provider 선택 ─────────────────────────────────────────────────────────
+let currentProvider = localStorage.getItem('provider') || 'claude';
+
+function selectProvider(p) {
+  currentProvider = p;
+  localStorage.setItem('provider', p);
+  document.getElementById('btnProviderClaude').classList.toggle('provider-active', p === 'claude');
+  document.getElementById('btnProviderOpenAI').classList.toggle('provider-active', p === 'openai');
+
   const ip = document.getElementById('misterIp').value.trim();
-  const key = document.getElementById('apiKeyInput').value.trim();
-  if (!ip) { setConfigStatus('MiSTer IP를 입력하세요', 'err'); return; }
+  if (!ip) return;
+  fetch(`http://${ip}:18765/config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider: p }),
+  }).catch(() => {});
+}
+
+// ── API Key 저장 ──────────────────────────────────────────────────────────
+async function saveKey(provider) {
+  const ip  = document.getElementById('misterIp').value.trim();
+  const key = document.getElementById(provider === 'claude' ? 'claudeKeyInput' : 'openaiKeyInput').value.trim();
+  if (!ip)  { setConfigStatus('MiSTer IP를 입력하세요', 'err'); return; }
   if (!key) { setConfigStatus('API Key를 입력하세요', 'err'); return; }
+
+  const payload = {};
+  payload[provider === 'claude' ? 'claude_api_key' : 'openai_api_key'] = key;
 
   try {
     const res = await fetch(`http://${ip}:18765/config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: key }),
+      body: JSON.stringify(payload),
     });
     if (res.ok) {
-      document.getElementById('apiKeyInput').value = '';
-      setConfigStatus('✓ API Key 저장됨', 'ok');
+      document.getElementById(provider === 'claude' ? 'claudeKeyInput' : 'openaiKeyInput').value = '';
+      document.getElementById(provider === 'claude' ? 'claudeStatus' : 'openaiStatus').textContent = '✓ 설정됨';
+      setConfigStatus('✓ 저장됨', 'ok');
       saveSettings();
     } else {
       setConfigStatus('저장 실패: ' + res.status, 'err');
@@ -62,7 +84,7 @@ async function saveApiKey() {
   }
 }
 
-// ── API Key 현황 확인 ─────────────────────────────────────────────────────
+// ── 설정 현황 확인 ─────────────────────────────────────────────────────────
 async function checkConfig() {
   const ip = document.getElementById('misterIp').value.trim();
   if (!ip) { setConfigStatus('MiSTer IP를 입력하세요', 'err'); return; }
@@ -70,13 +92,19 @@ async function checkConfig() {
 
   try {
     const res = await fetch(`http://${ip}:18765/config`);
-    if (res.ok) {
-      const data = await res.json();
-      const keyStr = data.api_key ? `설정됨 (${data.api_key})` : '미설정';
-      setConfigStatus(`API Key: ${keyStr}`, data.api_key ? 'ok' : 'err');
-    } else {
-      setConfigStatus('조회 실패: ' + res.status, 'err');
-    }
+    if (!res.ok) { setConfigStatus('조회 실패: ' + res.status, 'err'); return; }
+
+    const data = await res.json();
+
+    // provider 반영
+    selectProvider(data.provider || 'claude');
+
+    // key 상태 표시
+    document.getElementById('claudeStatus').textContent = data.claude_api_key ? '✓ 설정됨' : '';
+    document.getElementById('openaiStatus').textContent = data.openai_api_key ? '✓ 설정됨' : '';
+
+    const active = data.provider === 'openai' ? 'OpenAI' : 'Claude';
+    setConfigStatus(`✓ 연결됨 — ${active} 사용 중`, 'ok');
   } catch (e) {
     setConfigStatus('MiSTer 연결 실패: ' + e.message, 'err');
   }
@@ -87,6 +115,9 @@ function setConfigStatus(msg, cls = '') {
   el.textContent = msg;
   el.className = 'config-status ' + cls;
 }
+
+// 초기 provider 버튼 상태
+selectProvider(currentProvider);
 
 // ── 카메라 시작 ─────────────────────────────────────────────────────────────
 async function startCamera() {
