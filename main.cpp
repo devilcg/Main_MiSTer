@@ -34,6 +34,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "scheduler.h"
 #include "osd.h"
 #include "offload.h"
+#include "subtitle.h"
 
 const char *version = "$VER:" VDATE;
 
@@ -48,6 +49,7 @@ int main(int argc, char *argv[])
 	sched_setaffinity(0, sizeof(set), &set);
 
 	offload_start();
+	subtitle_init();
 
 	fpga_io_init();
 
@@ -87,6 +89,7 @@ int main(int argc, char *argv[])
 		frame_timer();
 		input_poll(0);
 		HandleUI();
+		subtitle_poll();
 		OsdUpdate();
 	}
 #endif

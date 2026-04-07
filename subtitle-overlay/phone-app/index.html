@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>MiSTer 자막 번역</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1a1a2e">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #1a1a2e;
+      color: #eee;
+      font-family: -apple-system, sans-serif;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 14px 16px 10px;
+      background: #16213e;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid #0f3460;
+    }
+    header h1 { font-size: 16px; font-weight: 700; color: #e94560; }
+    header span { font-size: 12px; color: #888; margin-left: auto; }
+
+    #setup {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    label { font-size: 12px; color: #888; margin-bottom: 2px; display: block; }
+    input, select {
+      width: 100%;
+      padding: 10px 12px;
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 8px;
+      color: #eee;
+      font-size: 14px;
+      outline: none;
+    }
+    input:focus, select:focus { border-color: #e94560; }
+
+    #viewfinder {
+      flex: 1;
+      position: relative;
+      background: #000;
+      overflow: hidden;
+      min-height: 240px;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    canvas { display: none; }
+
+    #overlay {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      padding: 10px 14px 14px;
+      background: linear-gradient(transparent, rgba(0,0,0,.85));
+    }
+    #translation {
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+      text-shadow: 0 1px 4px #000;
+      min-height: 22px;
+      word-break: keep-all;
+    }
+    #original {
+      font-size: 12px;
+      color: #aaa;
+      margin-top: 4px;
+      min-height: 16px;
+    }
+
+    #controls {
+      padding: 12px 16px;
+      display: flex;
+      gap: 10px;
+      background: #16213e;
+      border-top: 1px solid #0f3460;
+    }
+    button {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity .15s;
+    }
+    button:active { opacity: .7; }
+    #btnStart  { background: #e94560; color: #fff; }
+    #btnStop   { background: #333; color: #aaa; }
+    #btnStop.active { background: #0f3460; color: #eee; }
+
+    #status {
+      padding: 8px 16px;
+      font-size: 12px;
+      color: #666;
+      background: #16213e;
+      text-align: center;
+      border-top: 1px solid #0f3460;
+    }
+    #status.ok  { color: #4ade80; }
+    #status.err { color: #f87171; }
+
+    .dot {
+      display: inline-block;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #e94560;
+      margin-right: 6px;
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; }
+      50%      { opacity: .3; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🎮 MiSTer 자막</h1>
+  <span id="timerLabel">-</span>
+</header>
+
+<div id="setup">
+  <div>
+    <label>MiSTer IP 주소</label>
+    <input id="misterIp" type="text" placeholder="192.168.0.xxx" inputmode="decimal">
+  </div>
+  <div>
+    <label>Anthropic API Key</label>
+    <input id="apiKey" type="password" placeholder="sk-ant-...">
+  </div>
+  <div>
+    <label>캡처 간격</label>
+    <select id="interval">
+      <option value="1500">1.5초 (권장)</option>
+      <option value="2500">2.5초</option>
+      <option value="4000">4초 (느린 게임)</option>
+    </select>
+  </div>
+</div>
+
+<div id="viewfinder">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="canvas"></canvas>
+  <div id="overlay">
+    <div id="translation">카메라를 TV 화면에 향하세요</div>
+    <div id="original"></div>
+  </div>
+</div>
+
+<div id="controls">
+  <button id="btnStart" onclick="startCapture()">▶ 시작</button>
+  <button id="btnStop"  onclick="stopCapture()">■ 정지</button>
+</div>
+
+<div id="status">대기 중</div>
+
+<script src="app.js"></script>
+</body>
+</html>
