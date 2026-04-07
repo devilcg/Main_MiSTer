@@ -6,6 +6,7 @@ let captureLoop = null;
 let lastText    = '';
 let shotCount   = 0;
 let sentCount   = 0;
+let activeTab   = 'camera';
 
 // ── DOM ─────────────────────────────────────────────────────────────────────
 const video      = document.getElementById('video');
@@ -21,13 +22,71 @@ const elStop     = document.getElementById('btnStop');
 // ── 설정 로드/저장 ─────────────────────────────────────────────────────────
 function loadSettings() {
   document.getElementById('misterIp').value = localStorage.getItem('misterIp') || '';
-  document.getElementById('apiKey').value   = localStorage.getItem('apiKey')   || '';
 }
 function saveSettings() {
   localStorage.setItem('misterIp', document.getElementById('misterIp').value.trim());
-  localStorage.setItem('apiKey',   document.getElementById('apiKey').value.trim());
 }
 loadSettings();
+
+// ── 탭 전환 ─────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  activeTab = tab;
+  document.getElementById('tabCamera').classList.toggle('tab-active', tab === 'camera');
+  document.getElementById('tabConfig').classList.toggle('tab-active', tab === 'config');
+  document.getElementById('viewCamera').style.display = tab === 'camera' ? '' : 'none';
+  document.getElementById('viewConfig').style.display = tab === 'config' ? '' : 'none';
+}
+
+// ── API Key 저장 (MiSTer에 전송) ──────────────────────────────────────────
+async function saveApiKey() {
+  const ip = document.getElementById('misterIp').value.trim();
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if (!ip) { setConfigStatus('MiSTer IP를 입력하세요', 'err'); return; }
+  if (!key) { setConfigStatus('API Key를 입력하세요', 'err'); return; }
+
+  try {
+    const res = await fetch(`http://${ip}:18765/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: key }),
+    });
+    if (res.ok) {
+      document.getElementById('apiKeyInput').value = '';
+      setConfigStatus('✓ API Key 저장됨', 'ok');
+      saveSettings();
+    } else {
+      setConfigStatus('저장 실패: ' + res.status, 'err');
+    }
+  } catch (e) {
+    setConfigStatus('MiSTer 연결 실패: ' + e.message, 'err');
+  }
+}
+
+// ── API Key 현황 확인 ─────────────────────────────────────────────────────
+async function checkConfig() {
+  const ip = document.getElementById('misterIp').value.trim();
+  if (!ip) { setConfigStatus('MiSTer IP를 입력하세요', 'err'); return; }
+  saveSettings();
+
+  try {
+    const res = await fetch(`http://${ip}:18765/config`);
+    if (res.ok) {
+      const data = await res.json();
+      const keyStr = data.api_key ? `설정됨 (${data.api_key})` : '미설정';
+      setConfigStatus(`API Key: ${keyStr}`, data.api_key ? 'ok' : 'err');
+    } else {
+      setConfigStatus('조회 실패: ' + res.status, 'err');
+    }
+  } catch (e) {
+    setConfigStatus('MiSTer 연결 실패: ' + e.message, 'err');
+  }
+}
+
+function setConfigStatus(msg, cls = '') {
+  const el = document.getElementById('configStatus');
+  el.textContent = msg;
+  el.className = 'config-status ' + cls;
+}
 
 // ── 카메라 시작 ─────────────────────────────────────────────────────────────
 async function startCamera() {
@@ -48,76 +107,29 @@ async function startCamera() {
 function captureFrame() {
   const w = video.videoWidth  || 1280;
   const h = video.videoHeight || 720;
-  canvas.width  = Math.min(w, 960);   // 너무 크면 API 비용 증가
+  canvas.width  = Math.min(w, 960);
   canvas.height = Math.round(h * (canvas.width / w));
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL('image/jpeg', 0.85).split(',')[1]; // base64 only
+  return canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
 }
 
-// ── Claude Vision API 호출 ──────────────────────────────────────────────────
+// ── MiSTer /translate 호출 ──────────────────────────────────────────────────
 async function translateFrame(base64) {
-  const apiKey = document.getElementById('apiKey').value.trim();
-  if (!apiKey) throw new Error('API Key 없음');
+  const ip = document.getElementById('misterIp').value.trim();
+  if (!ip) throw new Error('MiSTer IP 없음');
 
-  const prompt = `이 이미지는 레트로 게임 화면입니다.
-화면에서 일본어 텍스트(대화, 메뉴, 자막 등)를 찾아 한국어로 번역하세요.
-
-규칙:
-1. 일본어 텍스트가 없으면 반드시 {"found":false} 만 반환
-2. 있으면 {"found":true,"original":"원문","translation":"한국어 번역"} 반환
-3. 캐릭터 이름은 음역 유지 (예: 루피, 나루토)
-4. JSON만 반환, 설명 없음`;
-
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetch(`http://${ip}:18765/translate`, {
     method: 'POST',
-    headers: {
-      'Content-Type':      'application/json',
-      'x-api-key':         apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 256,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } },
-          { type: 'text',  text: prompt },
-        ],
-      }],
-    }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: base64 }),
   });
 
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Claude API ${res.status}: ${err}`);
+    const err = await res.json().catch(() => ({ error: res.status }));
+    throw new Error(err.error || `서버 오류 ${res.status}`);
   }
 
-  const data = await res.json();
-  const text = data.content?.[0]?.text || '';
-
-  // JSON 파싱
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('응답 파싱 실패: ' + text);
-  return JSON.parse(match[0]);
-}
-
-// ── MiSTer로 자막 전송 ──────────────────────────────────────────────────────
-async function sendToMiSTer(text) {
-  const ip = document.getElementById('misterIp').value.trim();
-  if (!ip) return false;
-
-  try {
-    const res = await fetch(`http://${ip}:18765/subtitle`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    });
-    return res.ok;
-  } catch (e) {
-    console.warn('[send] MiSTer 전송 실패:', e.message);
-    return false;
-  }
+  return res.json();
 }
 
 // ── 한 사이클 처리 ──────────────────────────────────────────────────────────
@@ -150,20 +162,15 @@ async function processCycle() {
     elTrans.textContent = translation;
     elOrig.textContent  = original;
 
-    // 동일 텍스트 반복 전송 방지
+    // OSD 전송은 서버가 처리 — 중복 표시만 막기
     if (translation === lastText) {
-      setStatus('중복 — 전송 스킵', '');
+      setStatus('중복 — 스킵', '');
       return;
     }
     lastText = translation;
 
-    const ok = await sendToMiSTer(translation);
-    if (ok) {
-      sentCount++;
-      setStatus(`✓ MiSTer 전송 완료 (${sentCount}회)`, 'ok');
-    } else {
-      setStatus('⚠ MiSTer 전송 실패 (IP 확인)', 'err');
-    }
+    sentCount++;
+    setStatus(`✓ OSD 표시 완료 (${sentCount}회)`, 'ok');
 
   } catch (e) {
     setStatus('오류: ' + e.message, 'err');
@@ -175,8 +182,9 @@ async function processCycle() {
 async function startCapture() {
   saveSettings();
 
-  if (!document.getElementById('apiKey').value.trim()) {
-    setStatus('API Key를 입력하세요', 'err');
+  const ip = document.getElementById('misterIp').value.trim();
+  if (!ip) {
+    setStatus('MiSTer IP를 입력하세요', 'err');
     return;
   }
 
@@ -193,7 +201,6 @@ async function startCapture() {
   elStop.classList.add('active');
   setStatus('실행 중...', 'ok');
 
-  // 첫 프레임 즉시 처리
   await processCycle();
   captureLoop = setInterval(processCycle, ms);
 }
