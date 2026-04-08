@@ -1379,6 +1379,8 @@ static void get_display_name(direntext_t *dext, const char *ext, int options)
 	{
 		len = strlen(dext->altname);
 		strcat(dext->altname, ":");
+		static int dbg_n = 0;
+		if (dbg_n < 5) { FILE *_f=fopen("/tmp/nd.txt","a"); if(_f){fprintf(_f,"Q[%d]='%s'\n",dbg_n,dext->altname);fclose(_f);} dbg_n++; }
 		char *transl = strstr(names, dext->altname);
 		if (transl)
 		{
