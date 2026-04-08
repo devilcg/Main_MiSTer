@@ -1324,67 +1324,69 @@ static void get_display_name(direntext_t *dext, const char *ext, int options)
 				strcpy(dext->datecode, "------");
 			}
 		}
+	}
+	else
+	{
+		//do not remove ext if core supplies more than 1 extension and it's not list of cores
+		if (!(options & SCANO_CORES) && strlen(ext) > 3) return;
+		if (strchr(ext, '*') || strchr(ext, '?')) return;
 
-		if (!names_loaded)
-		{
-			if (names)
-			{
-				free(names);
-				names = 0;
-			}
-
-			int size = FileLoad("names.txt", 0, 0);
-			if (size)
-			{
-				names = (char*)malloc(size + 1);
-				if (names)
-				{
-					names[0] = 0;
-					FileLoad("names.txt", names, 0);
-					names[size] = 0;
-				}
-			}
-			names_loaded = 1;
-		}
-
-		if (names)
-		{
-			strcat(dext->altname, ":");
-			len = strlen(dext->altname);
-			char *transl = strstr(names, dext->altname);
-			if (transl)
-			{
-				int copy = 0;
-				transl += len;
-				len = 0;
-				while (*transl && len < (int)sizeof(dext->altname) - 1)
-				{
-					if (!copy && *transl <= 32)
-					{
-						transl++;
-						continue;
-					}
-
-					if (copy && *transl < 32) break;
-
-					copy = 1;
-					dext->altname[len++] = *transl++;
-				}
-				len++;
-			}
-
-			dext->altname[len - 1] = 0;
-		}
-		return;
+		/* find the extension on the end of the name*/
+		char *fext = strrchr(dext->altname, '.');
+		if (fext) *fext = 0;
 	}
 
-	//do not remove ext if core supplies more than 1 extension and it's not list of cores
-	if (!(options & SCANO_CORES) && strlen(ext) > 3) return;
-	if (strchr(ext, '*') || strchr(ext, '?')) return;
+	// names.txt 조회 — rbf/xml 및 ROM 파일 모두 적용
+	if (!names_loaded)
+	{
+		if (names)
+		{
+			free(names);
+			names = 0;
+		}
 
-	/* find the extension on the end of the name*/
-	char *fext = strrchr(dext->altname, '.');
-	if (fext) *fext = 0;
+		int size = FileLoad("names.txt", 0, 0);
+		if (size)
+		{
+			names = (char*)malloc(size + 1);
+			if (names)
+			{
+				names[0] = 0;
+				FileLoad("names.txt", names, 0);
+				names[size] = 0;
+			}
+		}
+		names_loaded = 1;
+	}
+
+	if (names)
+	{
+		strcat(dext->altname, ":");
+		len = strlen(dext->altname);
+		char *transl = strstr(names, dext->altname);
+		if (transl)
+		{
+			int copy = 0;
+			transl += len;
+			len = 0;
+			while (*transl && len < (int)sizeof(dext->altname) - 1)
+			{
+				if (!copy && *transl <= 32)
+				{
+					transl++;
+					continue;
+				}
+
+				if (copy && *transl < 32) break;
+
+				copy = 1;
+				dext->altname[len++] = *transl++;
+			}
+			len++;
+		}
+
+		dext->altname[len - 1] = 0;
+	}
 }
 
 int ScanDirectory(char* path, int mode, const char *extension, int options, const char *prefix, const char *filter)
