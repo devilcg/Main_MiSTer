@@ -1359,7 +1359,9 @@ static void get_display_name(direntext_t *dext, const char *ext, int options)
 		if (names) { free(names); names = 0; }
 		char names_path[1280];
 		snprintf(names_path, sizeof(names_path), "%s/names.txt", scanned_path);
+		printf("[DBG] path='%s' try='%s'\n", scanned_path, names_path);
 		int size = FileLoad(names_path, 0, 0);
+		printf("[DBG] size=%d\n", size);
 		if (size)
 		{
 			names = (char*)malloc(size + 1);
@@ -1367,6 +1369,7 @@ static void get_display_name(direntext_t *dext, const char *ext, int options)
 			{
 				FileLoad(names_path, names, 0);
 				names[size] = 0;
+				printf("[DBG] loaded ok\n");
 			}
 		}
 		names_loaded = 1;
@@ -1377,6 +1380,7 @@ static void get_display_name(direntext_t *dext, const char *ext, int options)
 	{
 		len = strlen(dext->altname);
 		strcat(dext->altname, ":");
+		printf("[DBG] lookup='%s'\n", dext->altname);
 		char *transl = strstr(names, dext->altname);
 		if (transl)
 		{
@@ -1391,9 +1395,11 @@ static void get_display_name(direntext_t *dext, const char *ext, int options)
 				dext->altname[len++] = *transl++;
 			}
 			dext->altname[len] = 0;
+			printf("[DBG] -> '%s'\n", dext->altname);
 			return; // 번역 완료
 		}
 		dext->altname[len] = 0; // ':' 제거
+		printf("[DBG] no match\n");
 	}
 
 	// 번역 없음 — 확장자 복원 여부 결정
