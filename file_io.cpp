@@ -1356,6 +1356,14 @@ static void get_display_name(direntext_t *dext, const char *ext, int options)
 	}
 
 	// names.txt 조회 — rbf/xml 및 ROM 파일 모두 적용
+	// 폴더가 바뀌면 names.txt 재로드
+	static char names_dir[1024] = {};
+	if (strcmp(names_dir, scanned_path) != 0)
+	{
+		names_loaded = 0;
+		strncpy(names_dir, scanned_path, sizeof(names_dir) - 1);
+	}
+
 	if (!names_loaded)
 	{
 		if (names)
@@ -1364,14 +1372,17 @@ static void get_display_name(direntext_t *dext, const char *ext, int options)
 			names = 0;
 		}
 
-		int size = FileLoad("names.txt", 0, 0);
+		// 현재 스캔 중인 폴더의 names.txt 로드
+		char names_path[1280];
+		snprintf(names_path, sizeof(names_path), "%s/%s/names.txt", getRootDir(), scanned_path);
+		int size = FileLoad(names_path, 0, 0);
 		if (size)
 		{
 			names = (char*)malloc(size + 1);
 			if (names)
 			{
 				names[0] = 0;
-				FileLoad("names.txt", names, 0);
+				FileLoad(names_path, names, 0);
 				names[size] = 0;
 			}
 		}
