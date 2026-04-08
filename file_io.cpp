@@ -1318,12 +1318,19 @@ static int names_loaded = 0;
 static void get_display_name(direntext_t *dext, const char *ext, int options)
 {
 	static char *names = 0;
+	static char names_dir[1024] = {};
+
 	memcpy(dext->altname, dext->de.d_name, sizeof(dext->altname));
 	if (dext->de.d_type == DT_DIR) return;
 
 	int len = strlen(dext->altname);
 	int xml = (len > 4 && (!strcasecmp(dext->altname + len - 4, ".mgl") || !strcasecmp(dext->altname + len - 4, ".mra")));
 	int rbf = (len > 4 && !strcasecmp(dext->altname + len - 4, ".rbf"));
+
+	// keep_ext: 번역 없을 때 확장자를 표시할지 여부 (원래 동작 유지용)
+	bool keep_ext = false;
+	char saved_ext[64] = {};
+
 	if (rbf || xml)
 	{
 		dext->altname[len - 4] = 0;
@@ -1345,80 +1352,72 @@ static void get_display_name(direntext_t *dext, const char *ext, int options)
 	}
 	else
 	{
-		//do not remove ext if core supplies more than 1 extension and it's not list of cores
-		if (!(options & SCANO_CORES) && strlen(ext) > 3) return;
-		if (strchr(ext, '*') || strchr(ext, '?')) return;
-
-		/* find the extension on the end of the name*/
+		// 확장자 임시 제거 (names.txt 조회를 위해)
 		char *fext = strrchr(dext->altname, '.');
-		if (fext) *fext = 0;
+		if (fext)
+		{
+			strncpy(saved_ext, fext, sizeof(saved_ext) - 1);
+			*fext = 0;
+		}
+
+		// 번역 없을 때 확장자를 다시 붙여야 하는 케이스 (원래 동작)
+		keep_ext = (!(options & SCANO_CORES) && strlen(ext) > 3) ||
+		           (strchr(ext, '*') != nullptr) ||
+		           (strchr(ext, '?') != nullptr);
 	}
 
-	// names.txt 조회 — rbf/xml 및 ROM 파일 모두 적용
-	// 폴더가 바뀌면 names.txt 재로드
-	static char names_dir[1024] = {};
+	// names.txt 로드 (폴더 변경 시 재로드)
 	if (strcmp(names_dir, scanned_path) != 0)
 	{
 		names_loaded = 0;
 		strncpy(names_dir, scanned_path, sizeof(names_dir) - 1);
 	}
-
 	if (!names_loaded)
 	{
-		if (names)
-		{
-			free(names);
-			names = 0;
-		}
-
-		// 현재 스캔 중인 폴더의 names.txt 로드 (scanned_path는 이미 전체 경로)
+		if (names) { free(names); names = 0; }
 		char names_path[1280];
 		snprintf(names_path, sizeof(names_path), "%s/names.txt", scanned_path);
-		printf("[names] scanned_path='%s'\n", scanned_path);
-		printf("[names] trying: %s\n", names_path);
 		int size = FileLoad(names_path, 0, 0);
-		printf("[names] size=%d\n", size);
 		if (size)
 		{
 			names = (char*)malloc(size + 1);
 			if (names)
 			{
-				names[0] = 0;
 				FileLoad(names_path, names, 0);
 				names[size] = 0;
-				printf("[names] loaded OK, first 80: %.80s\n", names);
 			}
 		}
 		names_loaded = 1;
 	}
 
+	// names.txt 조회
 	if (names)
 	{
-		strcat(dext->altname, ":");
 		len = strlen(dext->altname);
+		strcat(dext->altname, ":");
 		char *transl = strstr(names, dext->altname);
 		if (transl)
 		{
 			int copy = 0;
-			transl += len;
+			transl += len + 1; // ':' 다음부터
 			len = 0;
 			while (*transl && len < (int)sizeof(dext->altname) - 1)
 			{
-				if (!copy && *transl <= 32)
-				{
-					transl++;
-					continue;
-				}
-
+				if (!copy && *transl <= 32) { transl++; continue; }
 				if (copy && *transl < 32) break;
-
 				copy = 1;
 				dext->altname[len++] = *transl++;
 			}
-			len++;
+			dext->altname[len] = 0;
+			return; // 번역 완료
 		}
+		dext->altname[len] = 0; // ':' 제거
+	}
 
-		dext->altname[len - 1] = 0;
+	// 번역 없음 — 확장자 복원 여부 결정
+	if (keep_ext && saved_ext[0])
+	{
+		strcat(dext->altname, saved_ext);
 	}
 }
 
