@@ -1303,7 +1303,8 @@ static void get_display_name(direntext_t *dext, const char *ext, int options)
 	static char names_dir[1024] = {};
 
 	memcpy(dext->altname, dext->de.d_name, sizeof(dext->altname));
-	if (dext->de.d_type == DT_DIR) return;
+	// zip 파일은 DT_DIR로 위장되지만 names.txt 조회를 위해 통과시킴
+	if (dext->de.d_type == DT_DIR && !(dext->flags & DT_EXT_ZIP)) return;
 
 	int len = strlen(dext->altname);
 	int xml = (len > 4 && (!strcasecmp(dext->altname + len - 4, ".mgl") || !strcasecmp(dext->altname + len - 4, ".mra")));
