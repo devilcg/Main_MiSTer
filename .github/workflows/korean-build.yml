@@ -40,7 +40,11 @@ jobs:
           MERGE_BASE=$(git merge-base HEAD upstream/master)
           echo "upstream_sha=$UPSTREAM_SHA" >> $GITHUB_OUTPUT
           echo "merge_base=$MERGE_BASE" >> $GITHUB_OUTPUT
-          if [ "$MERGE_BASE" = "$UPSTREAM_SHA" ]; then
+          # workflow_dispatch이면 upstream 변경 없어도 강제 빌드
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "has_new=true" >> $GITHUB_OUTPUT
+            echo "수동 실행 — 강제 빌드."
+          elif [ "$MERGE_BASE" = "$UPSTREAM_SHA" ]; then
             echo "has_new=false" >> $GITHUB_OUTPUT
             echo "업스트림 변경 없음. 스킵."
           else
