@@ -1356,7 +1356,10 @@ static void get_display_name(direntext_t *dext, const char *ext, int options)
 		// 현재 스캔 중인 폴더의 names.txt 로드
 		char names_path[1280];
 		snprintf(names_path, sizeof(names_path), "%s/%s/names.txt", getRootDir(), scanned_path);
+		printf("[names] scanned_path='%s' rootdir='%s'\n", scanned_path, getRootDir());
+		printf("[names] trying: %s\n", names_path);
 		int size = FileLoad(names_path, 0, 0);
+		printf("[names] size=%d\n", size);
 		if (size)
 		{
 			names = (char*)malloc(size + 1);
@@ -1365,6 +1368,7 @@ static void get_display_name(direntext_t *dext, const char *ext, int options)
 				names[0] = 0;
 				FileLoad(names_path, names, 0);
 				names[size] = 0;
+				printf("[names] loaded OK, first 80: %.80s\n", names);
 			}
 		}
 		names_loaded = 1;
