@@ -1372,10 +1372,10 @@ static void get_display_name(direntext_t *dext, const char *ext, int options)
 			names = 0;
 		}
 
-		// 현재 스캔 중인 폴더의 names.txt 로드
+		// 현재 스캔 중인 폴더의 names.txt 로드 (scanned_path는 이미 전체 경로)
 		char names_path[1280];
-		snprintf(names_path, sizeof(names_path), "%s/%s/names.txt", getRootDir(), scanned_path);
-		printf("[names] scanned_path='%s' rootdir='%s'\n", scanned_path, getRootDir());
+		snprintf(names_path, sizeof(names_path), "%s/names.txt", scanned_path);
+		printf("[names] scanned_path='%s'\n", scanned_path);
 		printf("[names] trying: %s\n", names_path);
 		int size = FileLoad(names_path, 0, 0);
 		printf("[names] size=%d\n", size);
