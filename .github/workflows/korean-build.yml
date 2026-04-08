@@ -134,9 +134,11 @@ jobs:
         run: |
           DATE=$(date +'%y%m%d')
           TAG="korean-final-${DATE}"
-          if git ls-remote --tags origin | grep -q "refs/tags/${TAG}$"; then
-            TAG="korean-final-${DATE}-r2"
-          fi
+          N=2
+          while git ls-remote --tags origin | grep -q "refs/tags/${TAG}$"; do
+            TAG="korean-final-${DATE}-r${N}"
+            N=$((N + 1))
+          done
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "date=$DATE" >> $GITHUB_OUTPUT
           git tag "$TAG"
