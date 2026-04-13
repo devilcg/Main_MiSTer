@@ -34,13 +34,21 @@ echo ""
 
 # ── Step 1: Internet check ─────────────────────────
 step "Checking internet connection..."
-if ! ping -c 1 -W 3 8.8.8.8 > /dev/null 2>&1 && ! curl -sk --max-time 10 https://api.github.com > /dev/null 2>&1; then
+if ! ping -c 1 -W 3 8.8.8.8 > /dev/null 2>&1; then
     fail "No internet. Please check your network connection."
     exit 1
 fi
-ok "Connected."
+ok "Network reachable."
 
-# ── Step 2: Fetch latest release info ──────────────
+step "Checking GitHub API access..."
+if ! curl -sk --max-time 10 https://api.github.com > /dev/null 2>&1; then
+    fail "Cannot reach GitHub API (api.github.com)."
+    echo -e "    ${YELLOW}Tip: Check DNS or try: echo 'nameserver 8.8.8.8' > /etc/resolv.conf${NC}"
+    exit 1
+fi
+ok "GitHub API reachable."
+
+# ── Step 3: Fetch latest release info ──────────────
 step "Fetching latest release info from GitHub..."
 RELEASE_JSON=""
 for i in 1 2 3; do
@@ -57,7 +65,8 @@ fi
 
 LATEST_TAG=$(echo "$RELEASE_JSON" | grep '"tag_name"' | head -1 | cut -d'"' -f4)
 DOWNLOAD_URL=$(echo "$RELEASE_JSON" | grep '"browser_download_url"' | grep 'MiSTer"' | head -1 | cut -d'"' -f4)
-RELEASE_DATE=$(echo "$RELEASE_JSON" | grep '"published_at"' | head -1 | cut -d'"' -f4 | cut -c1-10)
+RELEASE_PUBLISHED=$(echo "$RELEASE_JSON" | grep '"published_at"' | head -1 | cut -d'"' -f4)
+RELEASE_DATE=$(echo "$RELEASE_PUBLISHED" | cut -c1-10)
 
 if [ -z "$LATEST_TAG" ] || [ -z "$DOWNLOAD_URL" ]; then
     fail "Failed to parse release info."
@@ -65,13 +74,13 @@ if [ -z "$LATEST_TAG" ] || [ -z "$DOWNLOAD_URL" ]; then
 fi
 ok "Latest: ${LATEST_TAG} (${RELEASE_DATE})"
 
-# ── Step 3: Version check ──────────────────────────
+# ── Step 4: Version check ──────────────────────────
 step "Checking installed version..."
-RELEASE_TS=$(date -d "$RELEASE_DATE" '+%s' 2>/dev/null || date -j -f '%Y-%m-%d' "$RELEASE_DATE" '+%s' 2>/dev/null)
+RELEASE_TS=$(date -d "$RELEASE_PUBLISHED" '+%s' 2>/dev/null || date -j -f '%Y-%m-%dT%H:%M:%SZ' "$RELEASE_PUBLISHED" '+%s' 2>/dev/null || echo 0)
 CURRENT_TS=0
 if [ -f "$INSTALL_PATH" ]; then
-    CURRENT_DATE=$(date -r "$INSTALL_PATH" '+%Y-%m-%d %H:%M')
-    CURRENT_TS=$(date -r "$INSTALL_PATH" '+%s')
+    CURRENT_TS=$(stat -c '%Y' "$INSTALL_PATH" 2>/dev/null || echo 0)
+    CURRENT_DATE=$(date -d "@${CURRENT_TS}" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "unknown")
     ok "Installed: ${CURRENT_DATE}"
 else
     ok "No existing installation found."
@@ -88,7 +97,7 @@ echo ""
 echo -e "${YELLOW}  New version available!${NC}"
 echo ""
 
-# ── Step 4: Backup ─────────────────────────────────
+# ── Step 5: Backup ─────────────────────────────────
 step "Backing up current binary..."
 mkdir -p "$BACKUP_DIR"
 if [ -f "$INSTALL_PATH" ]; then
@@ -99,7 +108,7 @@ else
     ok "Skipped (no existing binary)."
 fi
 
-# ── Step 5: Download ───────────────────────────────
+# ── Step 6: Download ───────────────────────────────
 step "Downloading new binary..."
 TMP_FILE="/tmp/MiSTer_korean_new"
 if ! curl -Lk --max-time 60 --progress-bar "$DOWNLOAD_URL" -o "$TMP_FILE"; then
@@ -116,7 +125,7 @@ if [ "$FILE_SIZE" -lt 500000 ]; then
 fi
 ok "Downloaded ($(( FILE_SIZE / 1024 )) KB)."
 
-# ── Step 6: Install ────────────────────────────────
+# ── Step 7: Install ────────────────────────────────
 step "Installing..."
 cp "$TMP_FILE" "$INSTALL_PATH"
 chmod +x "$INSTALL_PATH"
