@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  issues: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -82,30 +81,22 @@ jobs:
             echo "conflict=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: 충돌 시 이슈 생성
+      - name: 충돌 보고
         if: steps.check.outputs.has_new == 'true' && steps.rebase.outputs.conflict == 'true'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const upstreamSha = '${{ steps.check.outputs.upstream_sha }}';
-            const failedPatch = '${{ steps.rebase.outputs.failed_patch }}';
-            const issues = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              labels: 'rebase-conflict'
-            });
-            if (issues.data.length > 0) {
-              console.log('충돌 이슈 이미 존재');
-              return;
-            }
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: '[자동] Rebase 충돌 - upstream ' + upstreamSha.substring(0, 7),
-              body: '## 한글 패치 Rebase 충돌\n\n**충돌 패치**: `' + failedPatch + '`\n**Upstream SHA**: `' + upstreamSha + '`\n\n수동 해결 필요:\n```bash\ngit fetch upstream master\ngit rebase upstream/master\ngit push devilcg master --force\n```',
-              labels: ['rebase-conflict']
-            });
+        run: |
+          UPSTREAM_SHA="${{ steps.check.outputs.upstream_sha }}"
+          FAILED_PATCH="${{ steps.rebase.outputs.failed_patch }}"
+          echo "::error::Rebase 충돌 발생 — 수동 해결 필요"
+          echo ""
+          echo "충돌 패치  : $FAILED_PATCH"
+          echo "Upstream SHA: $UPSTREAM_SHA"
+          echo ""
+          echo "수동 해결 방법:"
+          echo "  git fetch upstream master"
+          echo "  git rebase upstream/master"
+          echo "  # 충돌 해결 후"
+          echo "  git push origin master --force"
+          exit 1
 
       - name: ARM 툴체인 설치
         if: steps.check.outputs.has_new == 'true' && steps.rebase.outputs.conflict == 'false'
